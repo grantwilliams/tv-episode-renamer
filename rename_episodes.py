@@ -5,7 +5,13 @@ import fetch_episode_names
 
 
 def get_episode(episode_name, non_episode_numbers):
-    episode_name = episode_name.replace('.', 'x')
+    """
+    Extract season and episode number from episode name
+    :param str episode_name: name of the original file
+    :param list non_episode_numbers: list of numbers in the show's name
+    :rtype: list
+    """
+    # episode_name = episode_name.replace('.', 'x')
 
     #  Removes numbers from the shows title, to not interfere with the regex search
     for num in non_episode_numbers:
@@ -37,6 +43,15 @@ def get_episode(episode_name, non_episode_numbers):
         return zero_padded_season_episode
 
 def preview_file_changes(directory, current_file_name, current_show, episodes_info, show_name_nums):
+    """
+    Present the proposed changes to the file names for the user to confirm
+    :param str directory: the parent directory, from where the script was called
+    :param str current_file_name: original file name
+    :param str current_show: TV show being changed, taken from user input
+    :param dict episodes_info: info for every episode of the show, api response from thetvdb.com
+    :param list show_name_nums: list of numbers in the show's name
+    :rtype: dict
+    """
     illegal_characters = '/\\?*:|"<>'
     season_episode = get_episode(os.path.splitext(current_file_name)[0], show_name_nums)
     episode_name = ""
@@ -60,11 +75,14 @@ def preview_file_changes(directory, current_file_name, current_show, episodes_in
         }
 
 def main():
-    current_dir = input("In which directory would you like to rename files? (Drag directory \
-into Terminal window): ").strip()[1:-1]  # removes leading and trailing single or double quotes
-    current_show = input("\nName of the show? (Will be used for naming the files, so please write \
-it how you would like it to appear in the file name): ")
+    current_dir = input("In which directory would you like to rename files? "+
+                        "(Drag directory into Terminal window): ").strip()
+    current_show = input("\nName of the show? (Will be used for naming the files, so please write "+
+                         "it how you would like it to appear in the file name): ")
     show_name_nums = re.findall(r'\d+', current_show)
+
+    if current_dir[0] in ["'", '"'] and current_dir[-1] in ["'", '"']:
+        current_dir = current_dir[1:-1]  # removes leading and trailing single or double quotes
 
     episodes_info = fetch_episode_names.start_search(current_show)
     folder_items = os.listdir(current_dir)
@@ -79,10 +97,11 @@ it how you would like it to appear in the file name): ")
             new_dir = os.getcwd()
             files = os.listdir(new_dir)
             for file in files:
-                renamed_file = preview_file_changes(new_dir, file, current_show, episodes_info,
-                                                    show_name_nums)
-                if renamed_file is not None:
-                    proposed_changes.append(renamed_file)
+                if file != 'Extras':
+                    renamed_file = preview_file_changes(new_dir, file, current_show, episodes_info,
+                                                        show_name_nums)
+                    if renamed_file is not None:
+                        proposed_changes.append(renamed_file)
         else:
             renamed_file = preview_file_changes(current_dir, item, current_show, episodes_info,
                                                 show_name_nums)
@@ -91,8 +110,8 @@ it how you would like it to appear in the file name): ")
 
     print('Files to be renamed: {}'.format(len(proposed_changes)))
     if len(proposed_changes) > 0:
-        confirm = input("Please take a look at the proposed file name changes, once confirmed, \
-they can not be changed back. Confirm all changes: y/n? ").lower()
+        confirm = input("Please take a look at the proposed file name changes, once confirmed, "+
+                        "they can not be changed back. Confirm all changes: y/n? ").lower()
         while True:
             if confirm in ['y', 'yes']:
                 for file in proposed_changes:

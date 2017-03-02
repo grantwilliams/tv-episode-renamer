@@ -49,6 +49,7 @@ Temporary Items
 # Cache Folders/Files
 __pycache__
 .cache
+*.pyc
 
 # Sensitive Files
 config.py

@@ -11,7 +11,9 @@ get_episode_file_name = [
     ["8x22 - That '70s Finale.avi", ['70'], ['08', '22']],
     ["822 - That '70s Finale.avi", ['70'], ['08', '22']],
     ["The 4400 - 04x10 Blah Blah.mkv", ['4400'], ['04', '10']],
-    ["21 Jump Steet - Episode 211 blah blah.mkv", ['21'], ['02', '11']]
+    ["21 Jump Steet - Episode 211 blah blah.mkv", ['21'], ['02', '11']],
+    # ["Sample.Show S03E01E02E03 Sample.Episode.mkv", [], ['03', '01', '02', '03']],
+    # ["Sample.Show 4x11 4x12 4x13 Sample.Episode.mkv", [], ['04', '11', '12', '13']]
 ]
 
 @pytest.fixture(params=get_episode_file_name)
