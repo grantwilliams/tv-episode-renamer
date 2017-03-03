@@ -2,6 +2,7 @@
 import os
 import re
 import fetch_episode_names
+from regex_patterns import PATTERNS
 
 
 def get_episode(episode_name, non_episode_numbers):
@@ -11,36 +12,60 @@ def get_episode(episode_name, non_episode_numbers):
     :param list non_episode_numbers: list of numbers in the show's name
     :rtype: list
     """
-    # episode_name = episode_name.replace('.', 'x')
 
+    ep_name_reduced = episode_name
     #  Removes numbers from the shows title, to not interfere with the regex search
     for num in non_episode_numbers:
-        episode_name = re.sub(r'{}'.format(num), '', episode_name, 1)
+        ep_name_reduced = re.sub(r'{}'.format(num), '', ep_name_reduced, 1)
 
-    #  Assumes the first number is the season/episode number, won't work if a differnt number
-    #  comes first ie. 1080p, 720p etc
-    nums_in_episode_name = re.findall(r'\d+', episode_name)
-    if len(nums_in_episode_name[0]) == 3:
-        season_digit_length = 1
-        episode_digit_length = 2
-    else:
-        season_digit_length = 2
-        episode_digit_length = 2
-    match = re.search(
-        r'''
-        (?ix)                   # Ignore case (i), and use verbose regex (x)
-        (?:s|season)?
-        (\d{{1,{0}}})           # Season number (Captured)
-        \s*                     # 0-or-more whitespaces
-        (?:                     # Non-grouping pattern
-          \.|e|x|episode|^      # e or x or episode or start of a line
-          )?                    # End non-grouping pattern
-        \s*                     # 0-or-more whitespaces
-        (\d{{1,{1}}})           # Episode number (Captured)
-        '''.format(season_digit_length, episode_digit_length), episode_name, re.I)
-    if match:
-        zero_padded_season_episode = ['0' + x if len(x) < 2 else x for x in match.groups()]
+    for item in ['x264', 'x265', '720p', '1080p']:
+        ep_name_reduced = re.sub(r'{}'.format(item), '', ep_name_reduced)
+
+    #  Assumes the first number is the season/episode number
+    nums_in_episode_name = re.findall(r'\d+', ep_name_reduced)
+    try:
+        season_digit_length = 1 if len(nums_in_episode_name[0]) == 3 else 2
+    except IndexError:
+        print("Could not find a season and episode number in file name '{}'".format(episode_name))
+        exit()
+
+    matches = [re.search(regex.format(season_digit_length), ep_name_reduced) for regex in PATTERNS]
+    best_match = max([match.groups() for match in matches if match is not None])
+
+    if best_match:
+        best_match = [num for num in best_match if len(num) <= 2]  # removes 3 or more digit nums
+        zero_padded_season_episode = ['0' + x if len(x) < 2 else x for x in best_match]
         return zero_padded_season_episode
+
+def format_season_episode(season_episode_numbers):
+    """
+    Takes list of season and episode numbers to create a string for placing in the file name
+    :param list season_episode_numbers: list of numbers, season and episode
+    :rtype str: eg. S02E03, S02E03E04
+    """
+
+    if len(season_episode_numbers) == 2:
+        return 'S{}E{}'.format(season_episode_numbers[0], season_episode_numbers[1])
+
+    list_as_ints = [int(x) for x in season_episode_numbers[1:]]
+
+    # Check #1 if list is comprised of all episode numbers or mixture of season and episode numbers
+    all_are_episodes = False
+    if list_as_ints == sorted(list_as_ints):
+        all_are_episodes = True
+
+    return_string = 'S{}'.format(season_episode_numbers[0])
+    if len(season_episode_numbers) % 2 == 0:
+        if all_are_episodes and len(list_as_ints) == len(set(list_as_ints)):  # Check #2
+            for num in season_episode_numbers[1:]:
+                return_string += 'E{}'.format(num)
+        elif all([x for x in season_episode_numbers[0::2]]):
+            for num in season_episode_numbers[1::2]:
+                return_string += 'E{}'.format(num)
+    else:
+        for num in season_episode_numbers[1:]:
+            return_string += 'E{}'.format(num)
+    return return_string
 
 def preview_file_changes(directory, current_file_name, current_show, episodes_info, show_name_nums):
     """
@@ -54,6 +79,7 @@ def preview_file_changes(directory, current_file_name, current_show, episodes_in
     """
     illegal_characters = '/\\?*:|"<>'
     season_episode = get_episode(os.path.splitext(current_file_name)[0], show_name_nums)
+
     episode_name = ""
     for episode in episodes_info:
         if episode['airedSeason'] == int(season_episode[0]) and \
@@ -61,8 +87,8 @@ def preview_file_changes(directory, current_file_name, current_show, episodes_in
             episode_name = re.sub(r'[{}]'.format(illegal_characters), '', episode['episodeName'])
     file_ext = os.path.splitext(current_file_name)[1]
 
-    new_file_name = '{} S{}E{} - {}{}'.format(current_show, season_episode[0], season_episode[1],
-                                              episode_name, file_ext)
+    new_file_name = '{} {} - {}{}'.format(current_show, format_season_episode(season_episode),
+                                          episode_name, file_ext)
 
     if new_file_name != current_file_name:
         print('Renaming: {} to:'.format(current_file_name))

@@ -15,9 +15,7 @@ preview_file_changes_args = [
 
 @pytest.fixture(params=preview_file_changes_args)
 def params_preview_file_changes(request):
-    print(request.param[3])
-    return [request.param[0], request.param[1], request.param[2], request.param[3],
-            request.param[4], request.param[5]]
+    return request.param
 
 def test_preview_file_changes(params_preview_file_changes):
     assert(rename_episodes.preview_file_changes(params_preview_file_changes[0],
