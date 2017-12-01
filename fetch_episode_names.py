@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 import json
 import requests
 from config import APIKEY
@@ -24,8 +24,7 @@ def search_series(series):
 
 def get_episodes(series_id, page=1):
     data = []
-    response = requests.get('{}/series/{}/episodes?page={}'.format(api_base, series_id, page),
-                            headers=headers).json()
+    response = requests.get('{}/series/{}/episodes?page={}'.format(api_base, series_id, page), headers=headers).json()
     data.extend(response['data'])
     num_pages = int(response['links']['last'])
     if num_pages > 1:
@@ -38,22 +37,24 @@ def get_episodes(series_id, page=1):
 
 def start_search(series):
     series_results = search_series(series)
+    if len(series_results['data']) > 1:
+        for index, result in enumerate(series_results['data']):
+            print('{}. {}'.format(index, result['seriesName']))
 
-    for index, result in enumerate(series_results['data']):
-        print('{}. {}'.format(index, result['seriesName']))
-
-    while True:
-        try:
-            choice = int(input('Which is the correct result?: '))
-        except ValueError:
-            print('Choice not valid, please choose a number from the list above: ')
-            continue
-        else:
-            if choice < 0 or choice >= len(series_results['data']):
+        while True:
+            try:
+                choice = int(input('Which is the correct result?: '))
+            except ValueError:
                 print('Choice not valid, please choose a number from the list above: ')
                 continue
             else:
-                break
+                if choice < 0 or choice >= len(series_results['data']):
+                    print('Choice not valid, please choose a number from the list above: ')
+                    continue
+                else:
+                    break
+    else:
+        choice = 0  # if there is only 1 search result
 
     series_id = series_results['data'][choice]['id']
 

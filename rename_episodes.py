@@ -1,6 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 import os
+import sys
 import re
+import argparse
 import fetch_episode_names
 from regex_patterns import PATTERNS
 
@@ -59,8 +61,8 @@ def format_season_episode(season_episode_numbers):
         if all_are_episodes and len(list_as_ints) == len(set(list_as_ints)):  # Check #2
             for num in season_episode_numbers[1:]:
                 return_string += 'E{}'.format(num)
-        elif all([x for x in season_episode_numbers[0::2]]):
-            for num in season_episode_numbers[1::2]:
+        elif all([x for x in season_episode_numbers[0::2]]):  # if every 2nd value is the same, means they are season #s
+            for num in season_episode_numbers[1::2]:  # so only every 2nd value starting at index 1 is an episode #
                 return_string += 'E{}'.format(num)
     else:
         for num in season_episode_numbers[1:]:
@@ -82,9 +84,17 @@ def preview_file_changes(directory, current_file_name, current_show, episodes_in
 
     episode_name = ""
     for episode in episodes_info:
-        if episode['airedSeason'] == int(season_episode[0]) and \
-        episode['airedEpisodeNumber'] == int(season_episode[1]):
-            episode_name = re.sub(r'[{}]'.format(illegal_characters), '', episode['episodeName'])
+        if len(season_episode[1:]) > 1:  # if multi-episode video file
+            for i, ep in enumerate(season_episode[1:]):
+                if episode['airedSeason'] == int(season_episode[0]) and episode['airedEpisodeNumber'] == int(ep):
+                    if i > 0:
+                        episode_name += ', ' + re.sub(r'[{}]'.format(illegal_characters), '', episode['episodeName'])
+                    else:
+                        episode_name = re.sub(r'[{}]'.format(illegal_characters), '', episode['episodeName'])
+        else:
+            if episode['airedSeason'] == int(season_episode[0]) and \
+            episode['airedEpisodeNumber'] == int(season_episode[1]):
+                episode_name += re.sub(r'[{}]'.format(illegal_characters), '', episode['episodeName'])
     file_ext = os.path.splitext(current_file_name)[1]
 
     new_file_name = '{} {} - {}{}'.format(current_show, format_season_episode(season_episode),
@@ -95,20 +105,16 @@ def preview_file_changes(directory, current_file_name, current_show, episodes_in
         print(new_file_name)
         print()
         return {
-            'old': '{}/{}'.format(directory, current_file_name),
-            'new': '{}/{} S{}E{} - {}{}'.format(directory, current_show, season_episode[0],
-                                                season_episode[1], episode_name, file_ext)
+            'old': os.path.join(directory, current_file_name),
+            'new': os.path.join(directory, new_file_name)
         }
 
-def main():
-    current_dir = input("In which directory would you like to rename files? "+
-                        "(Drag directory into Terminal window): ").strip()
-    current_show = input("\nName of the show? (Will be used for naming the files, so please write "+
-                         "it how you would like it to appear in the file name): ")
+def main(**kwargs):
+    current_dir = os.path.abspath(os.getcwd())
+    current_show = kwargs['show_name']
     show_name_nums = re.findall(r'\d+', current_show)
-
-    if current_dir[0] in ["'", '"'] and current_dir[-1] in ["'", '"']:
-        current_dir = current_dir[1:-1]  # removes leading and trailing single or double quotes
+    if kwargs['numbers_to_remove']:
+        show_name_nums.extend(kwargs['numbers_to_remove'])
 
     episodes_info = fetch_episode_names.start_search(current_show)
     folder_items = os.listdir(current_dir)
@@ -118,19 +124,17 @@ def main():
         renamed_file = None
         if item == 'Extras':
             pass # leave this folder alone
-        elif os.path.isdir('{}/{}'.format(current_dir, item)):
-            os.chdir('{}/{}'.format(current_dir, item))
+        elif os.path.isdir(os.path.join(current_dir, item)):
+            os.chdir(os.path.join(current_dir, item))
             new_dir = os.getcwd()
             files = os.listdir(new_dir)
             for file in files:
                 if file != 'Extras':
-                    renamed_file = preview_file_changes(new_dir, file, current_show, episodes_info,
-                                                        show_name_nums)
+                    renamed_file = preview_file_changes(new_dir, file, current_show, episodes_info, show_name_nums)
                     if renamed_file is not None:
                         proposed_changes.append(renamed_file)
         else:
-            renamed_file = preview_file_changes(current_dir, item, current_show, episodes_info,
-                                                show_name_nums)
+            renamed_file = preview_file_changes(current_dir, item, current_show, episodes_info, show_name_nums)
             if renamed_file is not None:
                 proposed_changes.append(renamed_file)
 
@@ -153,4 +157,13 @@ def main():
         print('No changes made')
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) < 2:
+        raise SyntaxError("Insufficient arguments: Must provide the name of the show as command line arg.")
+    p = argparse.ArgumentParser()
+    p.add_argument('show_name', help='Name of the show currently renaming files for', required=True)
+
+    #  can add this option to disregard numbers if they are giving problems with the file naming
+    #  takes a list of 1 or more numbers
+    p.add_argument('-nr', '--numbers-to-remove', nargs='+', help='eg: -rn 2017 2018 or --numbers-to-remove=2017,2018')
+    args = p.parse_args()
+    main(**vars(args))

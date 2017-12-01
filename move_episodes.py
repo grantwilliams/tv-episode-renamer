@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 
 """
 This module is used to move video files from sub directories up into the parent directory.  Often
@@ -28,26 +28,40 @@ Note: it will only go one level deep, so it will need to be run in each 'season'
 """
 
 import os
+import argparse
 import shutil
+from subtitle_exts import SUBTITLE_EXTS
 
-def preview_file_moves(current_dir, new_directory):
+def preview_file_moves(current_dir, new_directory, take_subtitles):
     new_dir_list = os.listdir(new_directory)
     largest_file = ""  # The largest file will be the video file that needs to be moved
     largest_file_size = 0
+    subtitle_file = None
     for file in new_dir_list:
         if os.path.getsize(file) > largest_file_size:
             largest_file = file
             largest_file_size = os.path.getsize(file)
-    print('{}/{} -->  '.format(new_directory, largest_file),
-          '{}/{}\n'.format(current_dir, largest_file))
-    return {
-        'old': '{}/{}'.format(new_directory, largest_file),
-        'new': '{}/{}'.format(current_dir, largest_file)
-    }
+        if os.path.splitext(file)[1] in SUBTITLE_EXTS:
+            subtitle_file = file
+    old_path = os.path.join(new_directory, largest_file)
+    new_path = os.path.join(current_dir, largest_file)
+    print('{} --> '.format(old_path), '{}\n'.format(new_path))
+    change_dict = {'old': old_path,
+                   'new': new_path}
+
+    if subtitle_file and take_subtitles:
+        old_subtitle_path = os.path.join(new_directory, subtitle_file)
+        new_subtitle_path = os.path.join(current_dir, subtitle_file)
+        print('{} --> '.format(old_subtitle_path), '{}\n'.format(new_subtitle_path))
+        change_dict.update({'sub_old': old_subtitle_path,
+                            'sub_new': new_subtitle_path})
+    return change_dict
 
 def confirm_file_moves(file_names, dirs_to_delete):
     for file_name in file_names:
         os.rename(file_name['old'], file_name['new'])
+        if file_name.get('sub_new', False):
+            os.rename(file_name['sub_old'], file_name['sub_new'])
 
     for directory in dirs_to_delete:
         print('{} deleted'.format(directory))
@@ -55,20 +69,21 @@ def confirm_file_moves(file_names, dirs_to_delete):
 
     print("\nAll files successfully moved!\n")
 
-def main():
-    current_dir = input("Which directory do you want to flatten? (Drag directory \
-into Terminal window): ").strip()[1:-1]  # Removes leading and trailing single or double quotes
+def main(**kwargs):
+    current_dir = os.path.abspath(os.getcwd())
+    print('Current Working Directory: {}'.format(current_dir))
 
     folders = os.listdir(current_dir)
-    dirs_to_delete = []
 
+    dirs_to_delete = []
     proposed_moves = []
     for folder in folders:
-        if os.path.isdir('{}/{}'.format(current_dir, folder)):
-            dirs_to_delete.append('{}/{}'.format(current_dir, folder))
-            os.chdir('{}/{}'.format(current_dir, folder))
+        folder_path = os.path.join(current_dir, folder)
+        if os.path.isdir(folder_path):
+            dirs_to_delete.append(folder_path)
+            os.chdir(folder_path)
             new_dir = os.getcwd()
-            proposed_moves.append(preview_file_moves(current_dir, new_dir))
+            proposed_moves.append(preview_file_moves(current_dir, new_dir, kwargs['take_subtitles']))
 
     # Change back to parent dir, to avoid Permission Error when deleting sub dirs
     os.chdir(current_dir)
@@ -86,4 +101,7 @@ into Terminal window): ").strip()[1:-1]  # Removes leading and trailing single o
             confirm = input('Sorry, could not understand, please choose y or n: ')
 
 if __name__ == '__main__':
-    main()
+    p = argparse.ArgumentParser()
+    p.add_argument('-s', '--take-subtitles', help='BOOLEAN')
+    args = p.parse_args()
+    main(**vars(args))
