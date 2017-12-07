@@ -1,4 +1,5 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import json
 import requests
 from config import APIKEY

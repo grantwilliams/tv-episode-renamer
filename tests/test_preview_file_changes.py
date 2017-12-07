@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import pytest
 import rename_episodes
 
@@ -29,3 +31,7 @@ def test_preview_file_changes(params_preview_file_changes):
                                                 params_preview_file_changes[3],
                                                 params_preview_file_changes[4])
            == params_preview_file_changes[5])
+
+def test_raises_exception_on_no_cli_arg():
+    with pytest.raises(SyntaxError):
+        rename_episodes.main(**{'show_name': None, 'numbers_to_remove': None})

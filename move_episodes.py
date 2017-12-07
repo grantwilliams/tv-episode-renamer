@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# -*- coding: utf-8 -*-
 
 """
 This module is used to move video files from sub directories up into the parent directory.  Often

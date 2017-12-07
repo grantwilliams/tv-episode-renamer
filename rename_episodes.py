@@ -1,6 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 import os
-import sys
 import re
 import argparse
 import fetch_episode_names
@@ -110,6 +110,8 @@ def preview_file_changes(directory, current_file_name, current_show, episodes_in
         }
 
 def main(**kwargs):
+    if not kwargs['show_name']:
+        raise SyntaxError("Insufficient arguments: Must provide the name of the show as command line arg.")
     current_dir = os.path.abspath(os.getcwd())
     current_show = kwargs['show_name']
     show_name_nums = re.findall(r'\d+', current_show)
@@ -157,10 +159,8 @@ def main(**kwargs):
         print('No changes made')
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        raise SyntaxError("Insufficient arguments: Must provide the name of the show as command line arg.")
     p = argparse.ArgumentParser()
-    p.add_argument('show_name', help='Name of the show currently renaming files for', required=True)
+    p.add_argument('show_name', help='Name of the show currently renaming files for')
 
     #  can add this option to disregard numbers if they are giving problems with the file naming
     #  takes a list of 1 or more numbers
