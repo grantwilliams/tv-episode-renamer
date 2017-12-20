@@ -29,80 +29,86 @@ Note: it will only go one level deep, so it will need to be run in each 'season'
 """
 
 import os
-import argparse
+from datetime import datetime
+import json
 import shutil
 from subtitle_exts import SUBTITLE_EXTS
 
-def preview_file_moves(current_dir, new_directory, take_subtitles):
-    new_dir_list = os.listdir(new_directory)
-    largest_file = ""  # The largest file will be the video file that needs to be moved
-    largest_file_size = 0
-    subtitle_file = None
-    for file in new_dir_list:
-        if os.path.getsize(file) > largest_file_size:
-            largest_file = file
-            largest_file_size = os.path.getsize(file)
-        if os.path.splitext(file)[1] in SUBTITLE_EXTS:
-            subtitle_file = file
-    old_path = os.path.join(new_directory, largest_file)
-    new_path = os.path.join(current_dir, largest_file)
-    print('{} --> '.format(old_path), '{}\n'.format(new_path))
-    change_dict = {'old': old_path,
-                   'new': new_path}
 
-    if subtitle_file and take_subtitles:
-        old_subtitle_path = os.path.join(new_directory, subtitle_file)
-        new_subtitle_path = os.path.join(current_dir, subtitle_file)
-        print('{} --> '.format(old_subtitle_path), '{}\n'.format(new_subtitle_path))
-        change_dict.update({'sub_old': old_subtitle_path,
-                            'sub_new': new_subtitle_path})
-    return change_dict
+class FileMove(object):
+    def __init__(self, root_dir, logger, log_directory, include_subtitles=False):
+        self.__root_dir = root_dir
+        self.__include_subtitles = include_subtitles
+        self.__root_dir_contents = os.listdir(self.__root_dir)
+        self.__dirs_to_delete = []
+        self.__proposed_changes = []
+        self.__logger = logger
+        self.__log_directory = log_directory
 
-def confirm_file_moves(file_names, dirs_to_delete):
-    for file_name in file_names:
-        os.rename(file_name['old'], file_name['new'])
-        if file_name.get('sub_new', False):
-            os.rename(file_name['sub_old'], file_name['sub_new'])
+    def get_root_dir(self):
+        return self.__root_dir
 
-    for directory in dirs_to_delete:
-        print('{} deleted'.format(directory))
-        shutil.rmtree(directory, ignore_errors=True)
+    def get_root_dir_contents(self):
+        return self.__root_dir_contents
 
-    print("\nAll files successfully moved!\n")
+    def dirs_to_delete(self):
+        return self.__dirs_to_delete
 
-def main(**kwargs):
-    current_dir = os.path.abspath(os.getcwd())
-    print('Current Working Directory: {}'.format(current_dir))
+    def proposed_changes(self):
+        return self.__proposed_changes
 
-    folders = os.listdir(current_dir)
+    def delete_dir(self, directory):
+        self.__dirs_to_delete.append(directory)
 
-    dirs_to_delete = []
-    proposed_moves = []
-    for folder in folders:
-        folder_path = os.path.join(current_dir, folder)
-        if os.path.isdir(folder_path):
-            dirs_to_delete.append(folder_path)
-            os.chdir(folder_path)
-            new_dir = os.getcwd()
-            proposed_moves.append(preview_file_moves(current_dir, new_dir, kwargs['take_subtitles']))
+    def preview_file_move(self, new_directory):
+        dir_list = os.listdir(new_directory)
+        largest_file = ""  # The largest file will be the video file that needs to be moved
+        largest_file_size = 0
+        subtitle_file = None
+        for file in dir_list:
+            file_size = os.path.getsize(file)
+            if file_size > largest_file_size:
+                largest_file = file
+                largest_file_size = file_size
+            if os.path.splitext(file)[1] in SUBTITLE_EXTS:
+                subtitle_file = file
+        old_file_path = os.path.join(new_directory, largest_file)
+        new_file_path = os.path.join(self.get_root_dir(), largest_file)
 
-    # Change back to parent dir, to avoid Permission Error when deleting sub dirs
-    os.chdir(current_dir)
+        self.__logger.info('Moving:\n{}\nto:\n{}\n'.format(old_file_path, new_file_path))
 
-    confirm = input("Please take a look at the proposed file moves, once confirmed, they can \
-    not be moved back. Confirm all changes: y/n? ").lower()
-    while True:
-        if confirm in ['y', 'yes']:
-            confirm_file_moves(proposed_moves, dirs_to_delete)
-            break
-        elif confirm in ['n', 'no']:
-            print('\nNo files were moved\n')
-            break
-        else:
-            confirm = input('Sorry, could not understand, please choose y or n: ')
+        change_dict = {'old_file': old_file_path, 'new_file': new_file_path}
 
-if __name__ == '__main__':
-    p = argparse.ArgumentParser()
-    p.add_argument('-s', '--take-subtitles', help='BOOLEAN')
-    args = p.parse_args()
-    main(**vars(args))
+        if subtitle_file and self.__include_subtitles:
+            old_subtitle_path = os.path.join(new_directory, subtitle_file)
+            new_subtitle_path = os.path.join(self.get_root_dir(), subtitle_file)
+            self.__logger.info('Moving:\n{}\nto:\n{}\n'.format(old_subtitle_path, new_subtitle_path))
+            change_dict.update({'old_sub': old_subtitle_path, 'new_sub': new_subtitle_path})
+        self.__proposed_changes.append(change_dict)
+
+    def confirm_file_moves(self):
+        for change in self.__proposed_changes:
+            os.rename(change['old_file'], change['new_file'])
+            if change.get('new_sub', False):
+                os.rename(change['old_sub'], change['new_sub'])
+
+        for directory in self.__dirs_to_delete:
+            shutil.rmtree(directory, ignore_errors=True)
+            self.__logger.warning('{} deleted'.format(directory))
+
+        self.__logger.info("\nAll files successfully moved!\n")
+
+    def save_file_changes(self):
+        time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open('{}/move_changes/{} changes.json'.format(self.__log_directory, time_now), 'w', encoding='utf-8') as write_file:
+            json.dump(obj=self.__proposed_changes, fp=write_file, indent=4)
+
+    def reverse_changes(self, changes_file):
+        with open(changes_file, 'r') as read_file:
+            changes = json.load(read_file)
+            for change in changes:
+                if not os.path.isdir(os.path.dirname(change.get('old_file', 'old_sub'))):
+                    os.mkdir(os.path.dirname(change.get('old_file', 'old_sub')))
+                os.rename(change['new_file'], change['old_file'])
+                if change.get('new_sub', False):
+                    os.rename(change['new_sub'], change['old_sub'])
